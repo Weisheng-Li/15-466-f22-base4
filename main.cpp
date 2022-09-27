@@ -94,6 +94,10 @@ int main(int argc, char **argv) {
 	//On windows, load OpenGL entrypoints: (does nothing on other platforms)
 	init_GL();
 
+	// enable blending for correctly showing transparency in text squad
+	glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
 	//Set VSYNC + Late Swap (prevents crazy FPS):
 	if (SDL_GL_SetSwapInterval(-1) != 0) {
 		std::cerr << "NOTE: couldn't set vsync + late swap tearing (" << SDL_GetError() << ")." << std::endl;

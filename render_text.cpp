@@ -1,80 +1,58 @@
 #include "GL.hpp"
-#include <glm/glm.hpp>
+#include "gl_compile_program.hpp"
 
-#include <string.h>
+#include <string>
 #include <vector>
 
-// as defined in main.cpp
-const unsigned int SCR_WIDTH = 1280;
-const unsigned int SCR_HEIGHT = 720;
+#include "render_text.hpp"
 
-struct TextRenderer {
-    struct Character {
-        unsigned int TextureID; // ID handle of the glyph texture
-        glm::ivec2   Size;      // Size of glyph
-        glm::ivec2   Offset;    // Offset from baseline to left/top of glyph
-        unsigned int Advance;   // Horizontal offset to advance to next glyph
-    };
+void TextRenderer::render_text(std::string text, float x, float y, float scale, glm::vec3 color) {
+    // activate corresponding render state	
+    glUseProgram(program);
 
-    TextRenderer();
-    ~TextRenderer();
+    glUniform3f(glGetUniformLocation(program, "textColor"), color.x, color.y, color.z);
+    glActiveTexture(GL_TEXTURE0);
+    glBindVertexArray(VAO);
 
-    GLuint program = 0;
-    GLuint tofu_texture;
-    GLuint VAO, VBO;
+    // iterate through all characters
+    std::string::const_iterator c;
+    for (c = text.begin(); c != text.end(); c++) 
+    {
+        Character ch = Characters[*c];
 
-    void render_text(std::string text, float x, float y, float scale, glm::vec3 color) {
-         // activate corresponding render state	
-        glUseProgram(program);
+        float xpos = x + ch.Offset.x * scale;
+        float ypos = y - (ch.Size.y - ch.Offset.y) * scale;
 
-        glUniform3f(glGetUniformLocation(program, "textColor"), color.x, color.y, color.z);
-        glActiveTexture(GL_TEXTURE0);
-        glBindVertexArray(VAO);
+        float w = ch.Size.x * scale;
+        float h = ch.Size.y * scale;
+        // update VBO for each character
+        float vertices[6][4] = {
+            { xpos,     ypos + h,   0.0f, 0.0f },            
+            { xpos,     ypos,       0.0f, 1.0f },
+            { xpos + w, ypos,       1.0f, 1.0f },
 
-        // iterate through all characters
-        std::string::const_iterator c;
-        for (c = text.begin(); c != text.end(); c++) 
-        {
-            // Character ch = Characters[*c];
-            Character tofu = {
-                tofu_texture,       // texture
-                glm::ivec2(25, 25), // size
-                glm::ivec2(0, 0),   // offset
-                30                  // Advance
-            }
+            { xpos,     ypos + h,   0.0f, 0.0f },
+            { xpos + w, ypos,       1.0f, 1.0f },
+            { xpos + w, ypos + h,   1.0f, 0.0f }           
+        };
+        // render glyph texture over quad
+        glBindTexture(GL_TEXTURE_2D, ch.TextureID);
+        // update content of VBO memory
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices); // be sure to use glBufferSubData and not glBufferData
 
-            float xpos = x + tofu.offset.x * scale;
-            float ypos = y - (tofu.Size.y - tofu.offset.y) * scale;
-
-            float w = tofu.Size.x * scale;
-            float h = tofu.Size.y * scale;
-            // update VBO for each character
-            float vertices[6][4] = {
-                { xpos,     ypos + h,   0.0f, 0.0f },            
-                { xpos,     ypos,       0.0f, 1.0f },
-                { xpos + w, ypos,       1.0f, 1.0f },
-
-                { xpos,     ypos + h,   0.0f, 0.0f },
-                { xpos + w, ypos,       1.0f, 1.0f },
-                { xpos + w, ypos + h,   1.0f, 0.0f }           
-            };
-            // render glyph texture over quad
-            glBindTexture(GL_TEXTURE_2D, tofu.TextureID);
-            // update content of VBO memory
-            glBindBuffer(GL_ARRAY_BUFFER, VBO);
-            glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices); // be sure to use glBufferSubData and not glBufferData
-
-            glBindBuffer(GL_ARRAY_BUFFER, 0);
-            // render quad
-            glDrawArrays(GL_TRIANGLES, 0, 6);
-            // now advance cursors for next glyph (note that advance is number of 1/64 pixels)
-            x += (tofu.Advance >> 6) * scale; // bitshift by 6 to get value in pixels (2^6 = 64 (divide amount of 1/64th pixels by 64 to get amount of pixels))
-        }
-
-        glUseProgram(0);
-        glBindVertexArray(0);
-        glBindTexture(GL_TEXTURE_2D, 0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        // render quad
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        // now advance cursors for next glyph (note that advance is number of 1/64 pixels)
+        x += (ch.Advance >> 6) * scale; // bitshift by 6 to get value in pixels (2^6 = 64 (divide amount of 1/64th pixels by 64 to get amount of pixels))
     }
+
+    glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glUseProgram(0);
+
+    GL_ERRORS();
 }
 
 TextRenderer::TextRenderer() {
@@ -104,24 +82,74 @@ TextRenderer::TextRenderer() {
         "    vec4 sampled = vec4(1.0, 1.0, 1.0, texture(text, TexCoords).r);\n"
         "    color = vec4(textColor, 1.0) * sampled;\n"
         "}\n"
-    )
-
-    // set up tofu texture
-    glGenTextures(1, &tofu_texture);
-    glBindTexture(GL_TEXTURE_2D, tofu_texture);
-    std::vector<uint8_t> tofu_image(25 * 25, 0xff);
-
-    glTexImage2D(
-        GL_TEXTURE_2D,
-        0,
-        GL_RED,
-        25
-        25,
-        0,
-        GL_RED,
-        GL_UNSIGNED_BYTE,
-        &tofu_image[0]
     );
+
+    glm::mat4 projection = glm::ortho(0.0f, static_cast<float>(SCR_WIDTH), 0.0f, static_cast<float>(SCR_HEIGHT));
+    glUseProgram(program);
+    glUniformMatrix4fv(glGetUniformLocation(program, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+    glUseProgram(0);
+
+    // allow pixel color on textures to be only 1-byte aligned
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+    // set up font table
+    FT_Library ft;
+    if (FT_Init_FreeType(&ft))
+    {
+        std::cout << "ERROR::FREETYPE: Could not init FreeType Library" << std::endl;
+        exit(EXIT_FAILURE);
+    }
+
+    FT_Face face;
+    if (FT_New_Face(ft, "../Reem_Kufi_Ink/ReemKufiInk-Regular.ttf", 0, &face))
+    {
+        std::cout << "ERROR::FREETYPE: Failed to load font" << std::endl;  
+        exit(EXIT_FAILURE);
+    }
+
+    FT_Set_Pixel_Sizes(face, 0, 48);
+
+    for (unsigned char c = 0; c < 128; c++) {
+        // load character glyph 
+        if (FT_Load_Char(face, c, FT_LOAD_RENDER))
+        {
+            std::cout << "ERROR::FREETYTPE: Failed to load Glyph" << std::endl;
+            continue;
+        }
+        // generate texture
+        unsigned int texture;
+        glGenTextures(1, &texture);
+        glBindTexture(GL_TEXTURE_2D, texture);
+        glTexImage2D(
+            GL_TEXTURE_2D,
+            0,
+            GL_RED,
+            face->glyph->bitmap.width,
+            face->glyph->bitmap.rows,
+            0,
+            GL_RED,
+            GL_UNSIGNED_BYTE,
+            face->glyph->bitmap.buffer
+        );
+        // set texture options
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        // now store character for later use
+        Character character = {
+            texture, 
+            glm::ivec2(face->glyph->bitmap.width, face->glyph->bitmap.rows),
+            glm::ivec2(face->glyph->bitmap_left, face->glyph->bitmap_top),
+            static_cast<unsigned int>(face->glyph->advance.x)
+        };
+        Characters.insert(std::pair<char, Character>(c, character));
+    }
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    // destroy FreeType once we're finished
+    FT_Done_Face(face);
+    FT_Done_FreeType(ft);
 
     // set up VAO and VBO
     glGenVertexArrays(1, &VAO);
@@ -132,7 +160,9 @@ TextRenderer::TextRenderer() {
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(float), 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);   
+    glBindVertexArray(0);
+
+    GL_ERRORS();
 }
 
 
