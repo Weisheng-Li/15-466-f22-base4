@@ -19,15 +19,18 @@ struct TextRenderer {
     struct Character {
         unsigned int TextureID; // ID handle of the glyph texture
         glm::ivec2   Size;      // Size of glyph
-        glm::ivec2   Offset;    // Offset from baseline to left/top of glyph
-        unsigned int Advance;   // Horizontal offset to advance to next glyph
     };
 
     TextRenderer();
     ~TextRenderer();
 
-    std::map<char, Character> Characters;
+    // mapping from glyph index to textures
+    std::map<FT_UInt, Character> glyph_tex;
+    
+    FT_Face face;
+    FT_Library ft;
 
+    void load_glyph(FT_UInt glyph_index);
     void render_text(std::string text, float x, float y, float scale, glm::vec3 color);
 
     GLuint program = 0;

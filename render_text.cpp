@@ -4,6 +4,9 @@
 #include <string>
 #include <vector>
 
+#include <hb.h>
+#include <hb-ft.h>
+
 #include "render_text.hpp"
 
 void TextRenderer::render_text(std::string text, float x, float y, float scale, glm::vec3 color) {
@@ -14,14 +17,33 @@ void TextRenderer::render_text(std::string text, float x, float y, float scale, 
     glActiveTexture(GL_TEXTURE0);
     glBindVertexArray(VAO);
 
-    // iterate through all characters
-    std::string::const_iterator c;
-    for (c = text.begin(); c != text.end(); c++) 
-    {
-        Character ch = Characters[*c];
+    // do the shaping through harfbuzz
+    hb_buffer_t *buf = hb_buffer_create();
+    hb_buffer_add_utf8(buf, text.c_str(), -1, 0, -1);
 
-        float xpos = x + ch.Offset.x * scale;
-        float ypos = y - (ch.Size.y - ch.Offset.y) * scale;
+    hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
+    hb_buffer_set_script(buf, HB_SCRIPT_LATIN);
+    hb_buffer_set_language(buf, hb_language_from_string("en", -1));
+
+    hb_font_t *font = hb_ft_font_create(face, nullptr);
+    hb_shape(font, buf, NULL, 0);
+
+    // iterate through all glyphs
+    unsigned int glyph_count;
+    hb_glyph_info_t *glyph_info = hb_buffer_get_glyph_infos(buf, &glyph_count);
+    hb_glyph_position_t *glyph_pos = hb_buffer_get_glyph_positions(buf, &glyph_count);
+
+    for (unsigned int i = 0; i < glyph_count; i++) 
+    {
+        hb_codepoint_t glyphid = glyph_info[i].codepoint;
+        if (glyph_tex.find(glyphid) == glyph_tex.end()) {
+            load_glyph(glyphid);
+        }
+        assert(glyph_tex.find(glyphid) != glyph_tex.end());
+        Character ch = glyph_tex.find(glyphid)->second;
+
+        float xpos = x + glyph_pos[i].x_offset * scale;
+        float ypos = y + glyph_pos[i].y_offset * scale;
 
         float w = ch.Size.x * scale;
         float h = ch.Size.y * scale;
@@ -45,12 +67,20 @@ void TextRenderer::render_text(std::string text, float x, float y, float scale, 
         // render quad
         glDrawArrays(GL_TRIANGLES, 0, 6);
         // now advance cursors for next glyph (note that advance is number of 1/64 pixels)
-        x += (ch.Advance >> 6) * scale; // bitshift by 6 to get value in pixels (2^6 = 64 (divide amount of 1/64th pixels by 64 to get amount of pixels))
-    }
+        x += (glyph_pos[i].x_advance >> 6) * scale; // bitshift by 6 to get value in pixels (2^6 = 64 (divide amount of 1/64th pixels by 64 to get amount of pixels))
+        y += (glyph_pos[i].y_advance >> 6) * scale;
 
+        // std::cout << "x: " << glyph_pos[i].x_advance << "y: " << glyph_pos[i].y_advance << std::endl;
+
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+    
     glBindVertexArray(0);
-    glBindTexture(GL_TEXTURE_2D, 0);
     glUseProgram(0);
+
+    // clean up harfbuzz
+    hb_buffer_destroy(buf);
+    hb_font_destroy(font);
 
     GL_ERRORS();
 }
@@ -93,14 +123,12 @@ TextRenderer::TextRenderer() {
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
     // set up font table
-    FT_Library ft;
     if (FT_Init_FreeType(&ft))
     {
         std::cout << "ERROR::FREETYPE: Could not init FreeType Library" << std::endl;
         exit(EXIT_FAILURE);
     }
 
-    FT_Face face;
     if (FT_New_Face(ft, "../Reem_Kufi_Ink/ReemKufiInk-Regular.ttf", 0, &face))
     {
         std::cout << "ERROR::FREETYPE: Failed to load font" << std::endl;  
@@ -109,47 +137,12 @@ TextRenderer::TextRenderer() {
 
     FT_Set_Pixel_Sizes(face, 0, 48);
 
+    // preload ASCII characters, since they are most likely
+    // to appear in text
     for (unsigned char c = 0; c < 128; c++) {
-        // load character glyph 
-        if (FT_Load_Char(face, c, FT_LOAD_RENDER))
-        {
-            std::cout << "ERROR::FREETYTPE: Failed to load Glyph" << std::endl;
-            continue;
-        }
-        // generate texture
-        unsigned int texture;
-        glGenTextures(1, &texture);
-        glBindTexture(GL_TEXTURE_2D, texture);
-        glTexImage2D(
-            GL_TEXTURE_2D,
-            0,
-            GL_RED,
-            face->glyph->bitmap.width,
-            face->glyph->bitmap.rows,
-            0,
-            GL_RED,
-            GL_UNSIGNED_BYTE,
-            face->glyph->bitmap.buffer
-        );
-        // set texture options
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        // now store character for later use
-        Character character = {
-            texture, 
-            glm::ivec2(face->glyph->bitmap.width, face->glyph->bitmap.rows),
-            glm::ivec2(face->glyph->bitmap_left, face->glyph->bitmap_top),
-            static_cast<unsigned int>(face->glyph->advance.x)
-        };
-        Characters.insert(std::pair<char, Character>(c, character));
+        FT_UInt glyph_index = FT_Get_Char_Index(face, c);
+        load_glyph(glyph_index);
     }
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    // destroy FreeType once we're finished
-    FT_Done_Face(face);
-    FT_Done_FreeType(ft);
 
     // set up VAO and VBO
     glGenVertexArrays(1, &VAO);
@@ -165,11 +158,51 @@ TextRenderer::TextRenderer() {
     GL_ERRORS();
 }
 
+void TextRenderer::load_glyph (FT_UInt glyph_index) {
+    // load character glyph 
+    if (FT_Load_Glyph(face, glyph_index, FT_LOAD_RENDER))
+    {
+        std::cout << "ERROR::FREETYTPE: Failed to load Glyph" << std::endl;
+        return;
+    }
+    // generate texture
+    unsigned int texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexImage2D(
+        GL_TEXTURE_2D,
+        0,
+        GL_RED,
+        face->glyph->bitmap.width,
+        face->glyph->bitmap.rows,
+        0,
+        GL_RED,
+        GL_UNSIGNED_BYTE,
+        face->glyph->bitmap.buffer
+    );
+    // set texture options
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    Character ch = {
+        texture, 
+        glm::ivec2(face->glyph->bitmap.width, face->glyph->bitmap.rows)
+    };
+    glyph_tex.insert(std::pair<FT_UInt, Character>(glyph_index, ch));
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
 
 TextRenderer::~TextRenderer() {
     if (program != 0) {
         glDeleteProgram(program);
         program = 0;
     }
+
+    // destroy FreeType once we're finished
+    FT_Done_Face(face);
+    FT_Done_FreeType(ft);
 }
 
