@@ -3,6 +3,7 @@
 #include "Scene.hpp"
 #include "Sound.hpp"
 #include "render_text.hpp"
+#include "state_machine.hpp"
 
 #include <glm/glm.hpp>
 
@@ -18,9 +19,8 @@ struct PlayMode : Mode {
 	virtual void update(float elapsed) override;
 	virtual void draw(glm::uvec2 const &drawable_size) override;
 
-	struct TextRenderer text_renderer;
-
-	//----- game state -----
+	TextRenderer text_renderer;
+	StateMachine state_machine;
 
 	//input tracking:
 	struct Button {

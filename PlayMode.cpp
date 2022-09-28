@@ -61,12 +61,25 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 }
 
 void PlayMode::update(float elapsed) {
+	// std::cout << elapsed << std::endl;
+	static float cooldown = 0;
+
 	// update based on the key pressed
-	{
-		if (left.pressed && !right.pressed) {}
-		if (!left.pressed && right.pressed) {}
-		if (down.pressed && !up.pressed) {}
-		if (!down.pressed && up.pressed) {}
+	if (cooldown > 0) cooldown -= elapsed;
+	if (cooldown <= 0) cooldown = 0.0f;
+	if (cooldown == 0.0f) {
+		if (left.pressed) {
+			state_machine.player_action(StateMachine::ATTACK);
+			cooldown = 1;
+		}
+		else if (right.pressed) {
+			state_machine.player_action(StateMachine::MOVE);
+			cooldown = 1;
+		}
+		else if (down.pressed) {
+			state_machine.player_action(StateMachine::CHARGE);
+			cooldown = 1;
+		}
 	}
 
 	//reset button press counters:
@@ -80,7 +93,7 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 	glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	text_renderer.render_text("hello world", 25, 25, 1.0f, glm::vec3(0,0,0));
+	text_renderer.render_text("hello world", 100, 700, 1.0f, glm::vec3(0,0,0));
 	
 	GL_ERRORS();
 }
