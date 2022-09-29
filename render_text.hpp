@@ -19,6 +19,7 @@ struct TextRenderer {
     struct Character {
         unsigned int TextureID; // ID handle of the glyph texture
         glm::ivec2   Size;      // Size of glyph
+        glm::ivec2   Offset;    // offset from baseline to left/top of glyph
     };
 
     TextRenderer();

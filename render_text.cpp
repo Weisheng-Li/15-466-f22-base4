@@ -51,21 +51,13 @@ void TextRenderer::render_text(std::string text, float x, float y, float scale, 
             load_glyph(glyphid);
         }
         assert(glyph_tex.find(glyphid) != glyph_tex.end());
-        FT_Load_Glyph(face, glyphid, FT_LOAD_DEFAULT);
-        FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL);
         Character ch = glyph_tex.find(glyphid)->second;
 
-        // float xpos = x + glyph_pos[i].x_offset * scale;
-        // float ypos = y - glyph_pos[i].y_offset * scale;
+        float xpos = x + ch.Offset.x * scale;
+        float ypos = y - (ch.Size.y - ch.Offset.y) * scale;
 
-        float xpos = x + face->glyph->bitmap_left * scale;
-        float ypos = y - (face->glyph->bitmap.rows - face->glyph->bitmap_top) * scale;
-
-        // float w = ch.Size.x * scale;
-        // float h = ch.Size.y * scale;
-
-        float w = (float) face->glyph->bitmap.width;
-        float h = (float) face->glyph->bitmap.rows;
+        float w = ch.Size.x * scale;
+        float h = ch.Size.y * scale;
 
         // update VBO for each character
         // std::cout << std::to_string(glyph_pos[i].x_offset) + " " << std::to_string(glyph_pos[i].y_offset) + " " << std::endl;
@@ -211,7 +203,8 @@ void TextRenderer::load_glyph (FT_UInt glyph_index) {
 
     Character ch = {
         texture, 
-        glm::ivec2(face->glyph->bitmap.width, face->glyph->bitmap.rows)
+        glm::ivec2(face->glyph->bitmap.width, face->glyph->bitmap.rows),
+        glm::ivec2(face->glyph->bitmap_left, face->glyph->bitmap_top)
     };
     glyph_tex.insert(std::pair<FT_UInt, Character>(glyph_index, ch));
     glBindTexture(GL_TEXTURE_2D, 0);

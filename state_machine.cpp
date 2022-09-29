@@ -11,7 +11,7 @@ StateMachine::StateMachine() {
     player.hp = HEALTHY;
     player.attack_state = 0;
 
-    enemy.loc = LOC3;
+    enemy.loc = LOC2;
     enemy.hp = HEALTHY;
     enemy.attack_state = 0;
 
