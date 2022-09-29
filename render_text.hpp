@@ -26,9 +26,12 @@ struct TextRenderer {
 
     // mapping from glyph index to textures
     std::map<FT_UInt, Character> glyph_tex;
-    
+
     FT_Face face;
     FT_Library ft;
+
+    // distance between two lines, determined by font and size
+    unsigned int line_space;
 
     void load_glyph(FT_UInt glyph_index);
     void render_text(std::string text, float x, float y, float scale, glm::vec3 color);

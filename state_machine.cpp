@@ -2,8 +2,8 @@
 #include <cassert>
 #include <cstdlib>
 #include <time.h>
-#include <string>
 #include <iostream>
+#include <fstream>
 
 
 StateMachine::StateMachine() {
@@ -11,14 +11,38 @@ StateMachine::StateMachine() {
     player.hp = HEALTHY;
     player.attack_state = 0;
 
-    enemy.loc = LOC4;
+    enemy.loc = LOC3;
     enemy.hp = HEALTHY;
     enemy.attack_state = 0;
 
     srand(time(NULL) % 25);
+
+    // load and initialize the text map
+    std::ifstream path("states.txt");
+
+    unsigned int state_count;
+    path >> state_count;
+    std::string line;
+    for (uint16_t i = 0; i < state_count; i++) {
+        std::string state;
+        int line_count;
+        
+        path >> line_count >> state;
+        std::getline(path, line);   // consume the newline character
+
+        std::vector<std::string> lines;
+        for (uint16_t j = 0; j < line_count; j++) {
+            std::getline(path, line);
+            lines.push_back(line);
+        }
+
+        text_map.emplace(state, lines);
+    }
+
+    current_lines = text_map.find("START")->second;
 }
 
-StateMachine::health damage(StateMachine::health health, unsigned int times) {
+StateMachine::health StateMachine::damage(health health, unsigned int times) {
     while (times) {
         if (health == StateMachine::HEALTHY) health = StateMachine::WOUNDED;
         else if (health == StateMachine::WOUNDED) health = StateMachine::DYING;
@@ -26,6 +50,15 @@ StateMachine::health damage(StateMachine::health health, unsigned int times) {
         else health = StateMachine::DEAD;
         times--;
     }
+
+    if (player.hp == DEAD) {
+        current_lines = text_map.find("LOST")->second;
+        is_end_game = true;
+    } else if (enemy.hp == DEAD) {
+        current_lines = text_map.find("WIN")->second;
+        is_end_game = true;
+    }   
+
     return health;
 }
 
@@ -46,13 +79,15 @@ void StateMachine::samuri::charge() {
     attack_state -= 1;
 };
 
-void StateMachine::player_action(action next_move) {
+void StateMachine::player_action(action player_action) {
+    if (is_end_game) return;
+
     // player's move
-    if (next_move == ATTACK) {
+    if (player_action == ATTACK) {
         player.attack();
-    } else if (next_move == MOVE) {
-        player.move(static_cast<location>(rand() % 4));
-    } else if (next_move == CHARGE) {
+    } else if (player_action == MOVE) {
+        player.move(static_cast<location>(rand() % 2));
+    } else if (player_action == CHARGE) {
         player.charge();
     } else {
         assert(false);    // unknown action
@@ -60,13 +95,20 @@ void StateMachine::player_action(action next_move) {
 
     // enemy's move (random AI)
     unsigned int enemy_move = rand() % 100;
+    action enemy_action;
     if (enemy_move < 40) {
         enemy.attack();
+        enemy_action = ATTACK;
     } else if (enemy_move < 70) {
-        enemy.move(static_cast<location>(rand() % 4));
+        enemy.move(static_cast<location>(rand() % 2));
+        enemy_action = MOVE;
     } else {
         enemy.charge();
+        enemy_action = CHARGE;
     }
+
+    current_lines.clear();
+    update_cur_lines(player_action, enemy_action);
 
     // resolve attack
     if (player.loc == enemy.loc && (player.attack_state > 0 || enemy.attack_state > 0)) {
@@ -81,6 +123,48 @@ void StateMachine::player_action(action next_move) {
     enemy.attack_state = enemy.attack_state > 0 ? 0 : enemy.attack_state;
 
     print_state();
+}
+
+void StateMachine::update_cur_lines(action player_action, action enemy_action){
+    std::vector<std::string>* text_pool = nullptr;
+    if (player.loc != enemy.loc) {
+        // DL : different location
+        if (player_action == MOVE) {
+            text_pool = & (text_map.find("MOVE_DL")->second);
+        } else if (player_action == ATTACK) {
+            text_pool = & (text_map.find("ATTACK_DL")->second);
+        } else {
+            text_pool = & (text_map.find("CHARGE_DL")->second);
+        }
+    } else {
+        // someone is attacking
+        if (player.attack_state > 0 || enemy.attack_state > 0) {
+            if (player_action == MOVE) {
+                // TD : take damage; DD : deal damage
+                text_pool = & (text_map.find("MOVE_TD")->second);
+            } else if (player_action == ATTACK) {
+                if (player.attack_state > enemy.attack_state) {
+                    text_pool = & (text_map.find("ATTACK_DD")->second);
+                } else if (player.attack_state > enemy.attack_state) {
+                    text_pool = & (text_map.find("ATTACK_TD")->second);
+                } else {
+                    text_pool = & (text_map.find("ATTACK_EVEN")->second);
+                }
+            } else if (player_action == CHARGE) {
+                text_pool = & (text_map.find("CHARGE_TD")->second);
+            }
+        } else {
+            // SL : same location
+            if (player_action == MOVE) {
+                text_pool = & (text_map.find("MOVE_SL")->second);
+            } else {
+                assert(player_action == CHARGE);
+                text_pool = & (text_map.find("CHARGE_SL")->second);
+            }
+        }
+    }
+    assert(text_pool);
+    current_lines.push_back(text_pool->at(rand() % text_pool->size()));
 }
 
 void StateMachine::print_state() {

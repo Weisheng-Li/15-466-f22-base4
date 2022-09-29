@@ -1,0 +1,53 @@
+13
+3 START
+You hear a man's voice from a corner of the tavarn.
+A voice you will never forget.
+You know it's time for vengeance.
+4 MOVE_DL
+You dash to the stairs. He is not here.
+You dash to the the center of the room. He is not here.
+You walk to the second floor. People are scared.
+You walk outside, surrounded by silence.
+4 ATTACK_DL
+You hit something! But it is harder than skin... Maybe a table?
+A relentless slash followed by the sound of a shattered teapot.
+You slash through the air.
+You hear a hollow swish.
+4 CHARGE_DL
+Energy swirls in your blade but no one is around.
+You are concentrating. You can feel the disturbance of the air.
+More Power.
+You try to be patient.
+4 MOVE_TD
+You stealth to the second floor, but his blade is waiting.
+You stealth to the wall, but his blade is waiting for you.
+You dash to a corner, but he has prepared a deadly slash.
+The moment you step outside, you know it is a trap.
+2 ATTACK_DD
+You slash, and you smell the blood and pain.
+It is a perfect slash. The taste of vengeance is wonderful.
+2 ATTACK_TD
+His blade is faster than yours. Your shoulder is bleeding.
+He breaks my guard. My next strike need to be more prepared.
+3 ATTACK_EVEN
+The blades clash. He is a worthy opponent.
+The swords clanged into each other.
+The clattering of swords is all you can hear.
+1 CHARGE_TD
+He caught me off guard!
+2 MOVE_SL
+Finally, he is within the reach of your blade.
+He is HERE!
+3 CHARGE_SL
+Energy swirls in your blade.
+More Power.
+You try to be patient.
+4 WIN
+Your are covered in blood.
+You touch his face, trying to imagine what he looks like.
+He is furry and ... slimy
+What is he?
+3 LOST
+Your consciousness is fading.
+You feel disapointed, and relieved.
+Sometimes death is the cure.

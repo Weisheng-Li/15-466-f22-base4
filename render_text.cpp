@@ -21,9 +21,10 @@ void TextRenderer::render_text(std::string text, float x, float y, float scale, 
     hb_buffer_t *buf = hb_buffer_create();
     hb_buffer_add_utf8(buf, text.c_str(), -1, 0, -1);
 
-    hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
-    hb_buffer_set_script(buf, HB_SCRIPT_LATIN);
-    hb_buffer_set_language(buf, hb_language_from_string("en", -1));
+    // hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
+    // hb_buffer_set_script(buf, HB_SCRIPT_LATIN);
+    // hb_buffer_set_language(buf, hb_language_from_string("en", -1));
+    hb_buffer_guess_segment_properties (buf);
 
     hb_font_t *font = hb_ft_font_create(face, nullptr);
     hb_shape(font, buf, NULL, 0);
@@ -33,6 +34,16 @@ void TextRenderer::render_text(std::string text, float x, float y, float scale, 
     hb_glyph_info_t *glyph_info = hb_buffer_get_glyph_infos(buf, &glyph_count);
     hb_glyph_position_t *glyph_pos = hb_buffer_get_glyph_positions(buf, &glyph_count);
 
+    // if x set to 0, choose the center position
+    if (x == 0) {
+        // get the total length of line
+        for (unsigned int i = 0; i < glyph_count; i++) {
+            x += (glyph_pos[i].x_advance >> 6) * scale;
+        }
+        // choose the center position
+        x = (SCR_WIDTH - x) / 2;
+    }
+
     for (unsigned int i = 0; i < glyph_count; i++) 
     {
         hb_codepoint_t glyphid = glyph_info[i].codepoint;
@@ -40,14 +51,24 @@ void TextRenderer::render_text(std::string text, float x, float y, float scale, 
             load_glyph(glyphid);
         }
         assert(glyph_tex.find(glyphid) != glyph_tex.end());
+        FT_Load_Glyph(face, glyphid, FT_LOAD_DEFAULT);
+        FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL);
         Character ch = glyph_tex.find(glyphid)->second;
 
-        float xpos = x + glyph_pos[i].x_offset * scale;
-        float ypos = y + glyph_pos[i].y_offset * scale;
+        // float xpos = x + glyph_pos[i].x_offset * scale;
+        // float ypos = y - glyph_pos[i].y_offset * scale;
 
-        float w = ch.Size.x * scale;
-        float h = ch.Size.y * scale;
+        float xpos = x + face->glyph->bitmap_left * scale;
+        float ypos = y - (face->glyph->bitmap.rows - face->glyph->bitmap_top) * scale;
+
+        // float w = ch.Size.x * scale;
+        // float h = ch.Size.y * scale;
+
+        float w = (float) face->glyph->bitmap.width;
+        float h = (float) face->glyph->bitmap.rows;
+
         // update VBO for each character
+        // std::cout << std::to_string(glyph_pos[i].x_offset) + " " << std::to_string(glyph_pos[i].y_offset) + " " << std::endl;
         float vertices[6][4] = {
             { xpos,     ypos + h,   0.0f, 0.0f },            
             { xpos,     ypos,       0.0f, 1.0f },
@@ -136,6 +157,8 @@ TextRenderer::TextRenderer() {
     }
 
     FT_Set_Pixel_Sizes(face, 0, 48);
+
+    line_space = face->size->metrics.height >> 6;
 
     // preload ASCII characters, since they are most likely
     // to appear in text

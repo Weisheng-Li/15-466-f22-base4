@@ -93,7 +93,11 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 	glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	text_renderer.render_text("hello world", 100, 700, 1.0f, glm::vec3(0,0,0));
+	float delta_y = static_cast<float> (text_renderer.line_space);
+	for (int i = 0; i < state_machine.current_lines.size(); i++) {
+		text_renderer.render_text(state_machine.current_lines[i], 
+			0, 450 - i * delta_y, 1.0f, glm::vec3(0,0,0));
+	}
 	
 	GL_ERRORS();
 }
